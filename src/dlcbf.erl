@@ -80,15 +80,11 @@ prop_add_are_members() ->
 check_membership(M, N, D, B) ->
     {ok, Dlht} = new(D, B),
     F = lists:foldl(fun(X, Acc) ->
-                            add(X, Acc),
+                            ok = add(X, Acc),
                             Acc
                     end, Dlht, M),
-    lists:all(fun(X) ->
-                      in(X, F)
-              end, M) and
-        lists:all(fun(X) ->
-                          not in(X, F)
-                  end, N).
+    lists:all(fun(X) -> in(X, F) end, M) andalso
+    lists:all(fun(X) -> not in(X, F) end, N).
 
 
 -endif.

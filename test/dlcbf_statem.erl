@@ -7,8 +7,10 @@
 
 -module(dlcbf_statem).
 
+-ifdef(EQC).
 -include_lib("eqc/include/eqc.hrl").
 -include_lib("eqc/include/eqc_statem.hrl").
+-include_lib("eunit/include/eunit.hrl").
 
 -compile(export_all).
 -behaviour(eqc_statem).
@@ -24,20 +26,37 @@
           keys = []
          }).
 
+-define(TEST_ITERATIONS, 150).
+-define(QC_OUT(P),
+        eqc:on_output(fun(Str, Args) -> io:format(user, Str, Args) end, P)).
+
+%% Eunit harness
+eqc_test() ->
+    ?assert(quickcheck(numtests(?TEST_ITERATIONS, ?QC_OUT(prop_set_membership())))).
+
 %% Initialize the state
 initial_state() ->
     #state{}.
 
 %% Command generator, S is the state
 command(S) ->
-    oneof([{call, ?MODULE, new, [4, 2048]} || S#state.bloom == undefined ] ++
-              [{call, dlcbf, add, [non_empty(binary()), S#state.bloom]} || S#state.bloom =/= undefined  ] ++
-              [{call, dlcbf, in, [non_empty(binary()), S#state.bloom]} || S#state.bloom =/= undefined, S#state.keys == [] ] ++
+    oneof([{call, ?MODULE, new, [sub_tables(), buckets()]} || S#state.bloom == undefined ] ++
+              [{call, dlcbf, add, [key(), S#state.bloom]} || S#state.bloom =/= undefined  ] ++
+              [{call, dlcbf, in, [key(), S#state.bloom]} || S#state.bloom =/= undefined, S#state.keys == [] ] ++
               [{call, dlcbf, in, [maybe_key(S#state.keys), S#state.bloom]} || S#state.bloom =/= undefined, S#state.keys =/= [] ]).
+
+key() ->
+    non_empty(binary()).
+
+sub_tables() ->
+    ?SUCHTHAT(X, nat(), X >= 4).
+
+buckets() ->
+    ?LET(P, ?SUCHTHAT(X, nat(), X >= 2 andalso X =< 12), trunc(math:pow(2, P))).
 
 maybe_key(KeyList) ->
     oneof([
-           ?SUCHTHAT(X, non_empty(binary()), not lists:member(X, KeyList)),
+           ?SUCHTHAT(X, key(), not lists:member(X, KeyList)),
            elements(KeyList)
           ]).
 
@@ -57,10 +76,18 @@ precondition(_S,{call,_,_,_}) ->
 %% OBS: S is the state before next_state(S,_,<command>)
 %% postcondition(_S,{call,?MODULE,Mod,_},Res) when Mod == new orelse Mod == add ->
 %%     is_binary(Res);
+
+postcondition(_S,{call,_,add,_},ok) ->
+    true;
+postcondition(_S,{call,_,add,_},{ok, _}) ->
+    true;
 postcondition(_S,{call,_,add,_},Res) ->
-    Res == ok;
+    {add_returned_badvalue, Res};
 postcondition(S,{call,dlcbf,in,[Key, _B]},Res) ->
-    Res == lists:member(Key, S#state.keys);
+    case Res == lists:member(Key, S#state.keys) of
+        true -> true;
+        _ -> {state_mismatched, {Key, Res}, S#state.keys}
+    end;
 postcondition(_S,_Call,_Res) ->
     true.
 
@@ -69,8 +96,8 @@ prop_set_membership() ->
             begin
                 {H,S,Res} = run_commands(?MODULE,Cmds),
                 ?WHENFAIL(
-                   io:format("History: ~p\nState: ~p\nRes: ~p\n",[H,S,Res]),
-                   Res == ok)
+                   io:format(user, "State: ~p\nRes: ~p\n",[S,Res]),
+                   aggregate(command_names(Cmds), Res == ok))
             end).
 
 new(A,B) ->
@@ -78,3 +105,10 @@ new(A,B) ->
         {ok, Bloom} -> Bloom;
         X -> X
     end.
+
+add(Key,B) ->
+    case dlcbf:add(Key, B) of
+        {ok, Bloom} -> Bloom;
+        X -> X
+    end.
+-endif.

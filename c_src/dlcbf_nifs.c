@@ -9,6 +9,10 @@ typedef struct {
     dlcbf* dlcbf;
 } dlcbf_handle;
 
+static ERL_NIF_TERM ATOM_OK;
+static ERL_NIF_TERM ATOM_TRUE;
+static ERL_NIF_TERM ATOM_FALSE;
+
 ERL_NIF_TERM dlcbf_new(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     unsigned int d, b;
     if (!enif_get_uint(env, argv[0], &d) || !enif_get_uint(env, argv[1], &b))
@@ -22,7 +26,7 @@ ERL_NIF_TERM dlcbf_new(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     ERL_NIF_TERM result = enif_make_resource(env, handle);
     enif_release_resource(handle);
 
-    return enif_make_tuple2(env, enif_make_atom(env, "ok"), result);
+    return enif_make_tuple2(env, ATOM_OK, result);
 }
 
 ERL_NIF_TERM dlcbf_insert(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -35,7 +39,8 @@ ERL_NIF_TERM dlcbf_insert(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
     dlcbf* dlcbf = handle->dlcbf;
     add(data.data, data.size, dlcbf);
-    return enif_make_atom(env, "ok");
+
+    return ATOM_OK;
 }
 
 ERL_NIF_TERM in(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -47,11 +52,11 @@ ERL_NIF_TERM in(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
         dlcbf* dlcbf = handle->dlcbf;
         if (member(data.data, data.size, dlcbf)) {
-            return enif_make_atom(env, "true");
+            return ATOM_TRUE;
         }
         else
         {
-            return enif_make_atom(env, "false");
+            return ATOM_FALSE;
         }
 }
 
@@ -63,6 +68,9 @@ static void dlcbf_resource_cleanup(ErlNifEnv* env, void* arg) {
 static int on_load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
 {
     ErlNifResourceFlags flags = (ErlNifResourceFlags)(ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER);
+    ATOM_OK = enif_make_atom(env, "ok");
+    ATOM_FALSE = enif_make_atom(env, "false");
+    ATOM_TRUE = enif_make_atom(env, "true");
     dlcbf_RESOURCE = enif_open_resource_type(env,
                                             "dlcbf",
                                             "dlcbf_resource",
